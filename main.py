@@ -23,3 +23,18 @@ smart_client = OpenAI(api_key=AI_KEY, base_url=AI_API_URL)
 sentry_sdk.init(dsn=SENTRY_DSN, enable_logs=True)
 
 app = App(token=SLACK_BOT_TOKEN)
+
+
+@app.command("/ping")
+def pong(ack, respond)
+    ack()
+    respond("Pong!", response_type="ephemeral")
+
+
+
+
+
+
+
+
+
