@@ -25,16 +25,79 @@ sentry_sdk.init(dsn=SENTRY_DSN, enable_logs=True)
 app = App(token=SLACK_BOT_TOKEN)
 
 
-@app.command("/ping")
-def pong(ack, respond)
+@app.command("/ping-20")
+def pong(ack, respond):
     ack()
     respond("Pong!", response_type="ephemeral")
 
 
+@app.event("app_mention")
+def summarize_magic_mention(event, client, say, ack, respond):
+    ack()
+
+    if "summarize" in event["text"].lower():
+        channel_id = event["channel"]
+        message_ts = event["ts"]
+        thread_ts = event.get("thread_ts")
+
+        if not thread_ts:
+            respond(
+                text="This does not look like a thread. I can only summarize in threads, sorry!"
+            )
+            return
+        try:
+            client.reactions_add(
+                channel=channel_id, timestamp=event["ts"], name="spin-loading"
+            )
+        except Exception as e:
+            print(f"unable to add reaction! {e}")
+
+            try:
+                result = client.conversations_replies(channel=channel_id, ts=thread_ts)
+                messages = result.get("messages", [])
+
+                thread_content = []
+                for msg in messages:
+                    if msg.get("ts") == message_ts:
+                        continue
+                    user = msg.get("user", "Unknown User")
+                    text = msg.get("text", "")
+                    thread_content.append(f"User {user}: {text}")
+
+                    read_text = "\n".join(thread_content)
+
+                    ai_rspnd = smart_client.chat.completions.create(
+                        model=AI_MODEL,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "only respond with the word beans",
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Summarize this Slack thread: \n\n{read_text}",
+                            },
+                        ],
+                    )
+
+                    summary = ai_rspnd.choices[0].message.content
+
+                    say(text=f"*Thread Summary:*\n{summary}", thread_ts=thread_ts)
+
+            except Exception as e:
+                print(f"unable to summarize thread! {e}")
+                say(
+                    text="Sorry, I had trouble summarizing the thread. Please try again later.",
+                    thread_ts=thread_ts,
+                )
+            finally:
+                try:
+                    client.reactions_remove(
+                        channel=channel_id, timestamp=message_ts, name="spin-loading"
+                    )
+                except Exception:
+                    pass
 
 
-
-
-
-
-
+if __name__ == "__main__":
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
