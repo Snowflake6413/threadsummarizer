@@ -102,7 +102,6 @@ def summary_menu(ack, shortcut, client):
         trigger_id=trigger_id,
         view={
             "type": "modal",
-            "block_id": "style_block",
             "callback_id": "summarize_modal_callback",
             "private_metadata": private_metadata,
             "title": {
@@ -123,6 +122,7 @@ def summary_menu(ack, shortcut, client):
                 },
                 {
                     "type": "section",
+                    "block_id": "style_block",
                     "text": {
                         "type": "mrkdwn",
                         "text": "What style do you want for your summarization?",
@@ -173,6 +173,7 @@ def summary_menu(ack, shortcut, client):
                 },
                 {
                     "type": "input",
+                    "block_id": "delivery_block",
                     "element": {
                         "type": "static_select",
                         "placeholder": {
