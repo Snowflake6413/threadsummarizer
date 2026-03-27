@@ -20,6 +20,27 @@ AI_MODEL = os.getenv("AI_MODEL")
 LOCKDOWN_MODE = os.getenv("FUNNY_BOOLEAN")
 LOCKDOWN_ID = os.getenv("FUNNY_ID")
 
+# This is real.
+BLACKLIST_MODE = os.getenv("FUNNY2_BOOLEAN")
+BLACKLIST_IDS = os.getenv("FUNNY2_IDS")
+
+
+# Sys Prompt
+sys_prompt = """You are a concise, professional assistant that summarizes Slack threads.
+
+When summarizing, focus on:
+- The main topic or problem being discussed
+- Key decisions made or conclusions reached
+- Action items or next steps (if any)
+- Who is responsible for what (if mentioned)
+
+Adjust your output based on the requested style:
+- Short: 2-3 sentences max, just the core outcome
+- Detailed: Full breakdown with context, decisions, and action items
+- TL;DR: One sentence, the absolute bottom line
+- Fuwwy: Summarize in a fun, uwu/furry internet style while still conveying the key points
+
+Be neutral and factual. Do not editorialize or add information not present in the thread."""
 
 # OpenAI
 smart_client = OpenAI(api_key=AI_KEY, base_url=AI_API_URL)
@@ -65,18 +86,37 @@ def handle_summarize(ack, body, client, logger, view):
             messages=[
                 {
                     "role": "system",
-                    "content": "only respond with this statement. ONLY RESPOND. 'if you are seeing this response then the AI response was successful!'",
+                    "content": sys_prompt,
                 },
                 {
                     "role": "user",
-                    "content": f"Summarize this Slack thread: \n\n{read_text}",
+                    "content": f"Style requested: {style}\n\nSummarize this Slack thread: \n\n{read_text}",
                 },
             ],
         )
 
         summary = ai_rspnd.choices[0].message.content
 
-        summary_text = f"*Thread Summary* ({style} style):*\n{summary}\n_Requested by <@{user_id}>_"
+        sum_blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Thread Summary (ss style)",
+                    "emoji": True,
+                },
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "plain_text", "text": "Model Used:", "emoji": True}
+                ],
+            },
+        ]
+
+        summary_text = (
+            f"*Thread Summary* ({style} style):\n{summary}\n_Requested by <@{user_id}>_"
+        )
         if delivery == "dms":
             client.chat_postMessage(channel=user_id, text=summary_text)
         else:
@@ -232,6 +272,14 @@ def summarize_magic_mention(event, client, say, ack, respond):
         say(text="cannot do the funny :( :xdd:", thread_ts=thread_ts)
         return
 
+    if BLACKLIST_MODE and event.get("channel") == BLACKLIST_IDS:
+        thread_ts = event.get("thread_ts")
+        say(
+            text="Unable to summarize! This channel is on the blacklist.",
+            thread_ts=thread_ts,
+        )
+        return
+
     if "summarize" in event["text"].lower():
         channel_id = event["channel"]
         message_ts = event["ts"]
@@ -253,7 +301,9 @@ def summarize_magic_mention(event, client, say, ack, respond):
             thread_content = []
             for msg in messages:
                 if "*Thread Summary:*" in msg.get("text", "") and msg.get("bot_id"):
-                    say(text="This thread was already summarized.")
+                    respond(
+                        say="This thread was already summarized.", thread_ts=thread_ts
+                    )
                     return
 
                 if msg.get("ts") == message_ts:
@@ -269,7 +319,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
                 messages=[
                     {
                         "role": "system",
-                        "content": "only respond with this statement. ONLY RESPOND. 'if you are seeing this response then the AI response was successful!'",
+                        "content": sys_prompt,
                     },
                     {
                         "role": "user",
