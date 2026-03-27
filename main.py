@@ -35,6 +35,193 @@ def pong(ack, respond):
     respond("Pong!", response_type="ephemeral")
 
 
+@app.view("summarize_modal_callback")
+def handle_summarize(ack, body, client, logger, view):
+    ack()
+
+    values = view["state"]["values"]
+    style = values["style_block"]["style_action"]["selected_option"]["value"]
+    delivery = values["delivery_block"]["delivery_action"]["selected_option"]["value"]
+
+    private_metadata = view["private_metadata"]
+    if not private_metadata:
+        return
+
+    channel_id, thread_ts = private_metadata.split("|")
+    user_id = body["user"]["id"]
+
+    try:
+        result = client.conversations_replies(channel=channel_id, ts=thread_ts)
+        messages = result.get("messages", [])
+
+        thread_content = []
+        for msg in messages:
+            text = msg.get("text", "")
+            thread_content.append(f"User: {text}")
+        read_text = "\n".join(thread_content)
+
+        ai_rspnd = smart_client.chat.completions.create(
+            model=AI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "only respond with this statement. ONLY RESPOND. 'if you are seeing this response then the AI response was successful!'",
+                },
+                {
+                    "role": "user",
+                    "content": f"Summarize this Slack thread: \n\n{read_text}",
+                },
+            ],
+        )
+
+        summary = ai_rspnd.choices[0].message.content
+
+        summary_text = f"*Thread Summary* ({style} style):*\n{summary}\n_Requested by <@{user_id}>_"
+        if delivery == "dms":
+            client.chat_postMessage(channel=user_id, text=summary_text)
+        else:
+            client.chat_postMessage(
+                channel=channel_id, thread_ts=thread_ts, text=summary_text
+            )
+
+    except Exception as e:
+        print(f"Error handling modal submission! {e}")
+
+
+@app.shortcut("action_sum")
+def summary_menu(ack, shortcut, client):
+    ack()
+
+    trigger_id = shortcut["trigger_id"]
+
+    channel_id = shortcut.get("channel", {}).get("id")
+    message_ts = shortcut.get("message_ts")
+    private_metadata = f"{channel_id}|{message_ts}"
+
+    client.views_open(
+        trigger_id=trigger_id,
+        view={
+            "type": "modal",
+            "block_id": "style_block",
+            "callback_id": "summarize_modal_callback",
+            "private_metadata": private_metadata,
+            "title": {
+                "type": "plain_text",
+                "text": "Summarization Options",
+                "emoji": True,
+            },
+            "submit": {"type": "plain_text", "text": "Summarize", "emoji": True},
+            "close": {"type": "plain_text", "text": "Cancel", "emoji": True},
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Options for your summarization!",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "What style do you want for your summarization?",
+                    },
+                    "accessory": {
+                        "type": "static_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Select an item",
+                            "emoji": True,
+                        },
+                        "options": [
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Short",
+                                    "emoji": True,
+                                },
+                                "value": "short",
+                            },
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Detailed",
+                                    "emoji": True,
+                                },
+                                "value": "detailed",
+                            },
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Fuwwy",
+                                    "emoji": True,
+                                },
+                                "value": "fuwwy",
+                            },
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "TL:DR",
+                                    "emoji": True,
+                                },
+                                "value": "tldr",
+                            },
+                        ],
+                        "action_id": "style_action",
+                    },
+                },
+                {
+                    "type": "input",
+                    "element": {
+                        "type": "static_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Select an item",
+                            "emoji": True,
+                        },
+                        "options": [
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "DMs",
+                                    "emoji": True,
+                                },
+                                "value": "dms",
+                            },
+                            {
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "In Thread",
+                                    "emoji": True,
+                                },
+                                "value": "thread",
+                            },
+                        ],
+                        "action_id": "delivery_action",
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Do you want to forward the summarization to your DMs or in the thread? ",
+                        "emoji": True,
+                    },
+                    "optional": False,
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "plain_text",
+                            "text": "Be aware, if you select to forward it to the thread, a message will be sent in the thread notifying that you requested a summarization.",
+                            "emoji": True,
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+
+
 @app.event("app_mention")
 def summarize_magic_mention(event, client, say, ack, respond):
     ack()
@@ -92,7 +279,21 @@ def summarize_magic_mention(event, client, say, ack, respond):
 
             summary = ai_rspnd.choices[0].message.content
 
-            say(text=f"*Thread Summary:*\n{summary}", thread_ts=thread_ts)
+            sum_blocks = [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*Thread Summary:*\n{summary}"},
+                },
+                {"type": "divider"},
+                {
+                    "type": "context",
+                    "elements": [
+                        {"type": "mrkdwn", "text": f"Model Used: '{AI_MODEL}"}
+                    ],
+                },
+            ]
+
+            say(blocks=sum_blocks, thread_ts=thread_ts)
 
         except Exception as e:
             print(f"unable to summarize thread! {e}")
