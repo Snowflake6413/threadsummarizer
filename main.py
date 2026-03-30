@@ -114,11 +114,20 @@ def handle_summarize(ack, body, client, logger, view):
             },
         ]
 
+        permalink_response = client.chat_getPermalink(
+            channel=channel_id, message_ts=thread_ts
+        )
+        thread_link = permalink_response["permalink"]
+
         summary_text = (
             f"*Thread Summary* ({style} style):\n{summary}\n_Requested by <@{user_id}>_"
         )
+
+        summary_text_dms = (
+            f"*Thread Summary* ({style} style):\n{summary}\n Thread: {thread_link} "
+        )
         if delivery == "dms":
-            client.chat_postMessage(channel=user_id, text=summary_text)
+            client.chat_postMessage(channel=user_id, text=summary_text_dms)
         else:
             client.chat_postMessage(
                 channel=channel_id, thread_ts=thread_ts, text=summary_text
@@ -267,17 +276,17 @@ def summary_menu(ack, shortcut, client):
 def summarize_magic_mention(event, client, say, ack, respond):
     ack()
 
-    if LOCKDOWN_MODE and event.get("channel") != LOCKDOWN_ID:
-        thread_ts = event.get("thread_ts")
-        say(text="cannot do the funny :( :xdd:", thread_ts=thread_ts)
-        return
-
     if BLACKLIST_MODE and event.get("channel") == BLACKLIST_IDS:
         thread_ts = event.get("thread_ts")
         say(
             text="Unable to summarize! This channel is on the blacklist.",
             thread_ts=thread_ts,
         )
+        return
+
+    if LOCKDOWN_MODE and event.get("channel") != LOCKDOWN_ID:
+        thread_ts = event.get("thread_ts")
+        say(text="cannot do the funny :( :xdd:", thread_ts=thread_ts)
         return
 
     if "summarize" in event["text"].lower():
