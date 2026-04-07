@@ -1,4 +1,5 @@
 import os
+import re
 
 import sentry_sdk
 from dotenv import load_dotenv
@@ -54,6 +55,75 @@ app = App(token=SLACK_BOT_TOKEN)
 def pong(ack, respond):
     ack()
     respond("Pong!", response_type="ephemeral")
+
+
+@app.event("message")
+def handle_dm_link(event, client, say):
+    channel_type = event.get("channel_type")
+
+    if channel_type != "im":
+        return
+
+    text = event.get("text", "")
+
+    link_pattern = r"https://[A-Za-z0-9\-]+\.slack\.com/archives/[A-Za-z0-9]+/p[0-9]+"
+    match = re.search(link_pattern, text)
+
+    if not match:
+        say(
+            "Hello! Please send me a link to the a Slack thread and I'll summarize it for you."
+        )
+        return
+
+    channel_id = match.group(1)
+    raw_ts = match.group(2)
+
+    message_ts = f"{raw_ts[:-6]}.{raw_ts[-6:]}"
+
+    thread_ts_match = re.search(r"thread_ts=([0-9.]+)", text)
+    thread_ts = thread_ts_match.group(1)
+
+    say(":spin-loading: Fetching and summarzing that thread. This might take a moment.")
+
+    try:
+        result = client.conversation_replies(channel=channel_id, ts=thread_ts)
+        messages = result.get("messages", [])
+
+        if not messages:
+            say("Unable to find messages. Is the link you sent valid?")
+            return
+
+        thread_content = []
+        for msg in messages:
+            user = msg.get("user", "Unknown User")
+            msg_text = msg.get("text", "")
+            thread_content.append(f"User {user}: {msg_text}")
+
+        read_text = "\n".join(thread_content)
+
+        ai_rspnd = smart_client.chat.completions.create(
+            model=AI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": sys_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": f"Style requested: {style}\n\nSummarize this Slack thread: \n\n{read_text}",
+                },
+            ],
+        )
+
+        summary = ai_rspnd.choices[0].message.content
+
+        say(f"*Thread Summary:*\n{summary}\n\n_Link:_ <{text}|Original Thread>")
+
+    except Exception as e:
+        print("error handling dm link summarization")
+        say(
+            "Sorry! I am unable to summarize that link! If the link is from a private channel, please invite me to that channel!"
+        )
 
 
 @app.view("summarize_modal_callback")
@@ -295,7 +365,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
         thread_ts = event.get("thread_ts")
 
         if not thread_ts:
-            pass
+            thread_ts = message_ts
         try:
             client.reactions_add(
                 channel=channel_id, timestamp=event["ts"], name="spin-loading"
