@@ -51,16 +51,22 @@ def pong(ack, respond):
 
 @app.event("message")
 def handle_dm_link(event, client, say):
-    channel_type = event.get("channel_type")
 
-    if channel_type != "im":
+    # ignore clanker messages
+    if event.get("bot_id") or event.get("subtype") in (
+        "bot_message",
+        "message_changed",
+    ):
+        return
+
+    channel_id = event.get("channel")
+    if not channel_id or not channel_id.startswith("D"):
         return
 
     text = event.get("text", "")
 
-    link_pattern = (
-        r"https://[A-Za-z0-9\-]+\.slack\.com/archives/([A-Z0-9]+)/p([0-9]{16})"
-    )
+    link_pattern = r"<?https://[A-Za-z0-9\-]+\.slack\.com/archives/([A-Z0-9]+)/p([0-9]{16})(?:\?thread_ts=([0-9.]+))?>?"
+
     match = re.search(link_pattern, text)
 
     if not match:
@@ -77,7 +83,7 @@ def handle_dm_link(event, client, say):
     thread_ts_match = re.search(r"thread_ts=([0-9.]+)", text)
     thread_ts = thread_ts_match.group(1) if thread_ts_match else message_ts
 
-    say(
+    start_msg = say(
         ":spin-loading: Fetching and summarizing that thread. This might take a moment."
     )
 
@@ -114,7 +120,35 @@ def handle_dm_link(event, client, say):
 
         summary = ai_rspnd.choices[0].message.content
 
-        say(f"*Thread Summary:*\n{summary}\n\n_Link:_ <{text}|Original Thread>")
+        sum_dm_blocks = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"Thread Summary ({style} style)"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"{summary}",
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "plain_text",
+                        "text": f" AI Model used: {AI_MODEL}",
+                        "emoji": True,
+                    }
+                ],
+            },
+        ]
+
+        say(
+            blocks=sum_dm_blocks,
+            thread_ts=start_msg["ts"],
+        )
 
     except Exception as e:
         sentry_sdk.capture_exception(e)
