@@ -405,9 +405,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
             thread_content = []
             for msg in messages:
                 if "*Thread Summary:*" in msg.get("text", "") and msg.get("bot_id"):
-                    respond(
-                        text="This thread was already summarized.", thread_ts=thread_ts
-                    )
+                    say(text="This thread was already summarized.", thread_ts=thread_ts)
                     return
 
                 if msg.get("ts") == message_ts:
