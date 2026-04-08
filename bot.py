@@ -33,6 +33,8 @@ Adjust your output based on the requested style:
 - TL;DR: One sentence, the absolute bottom line
 - Fuwwy: Summarize in a fun, uwu/furry internet style while still conveying the key points
 
+If no style was selected, adjust your output to be detailed.
+
 Be neutral and factual. Do not editorialize or add information not present in the thread."""
 
 # OpenAI
