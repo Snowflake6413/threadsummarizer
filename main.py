@@ -81,7 +81,7 @@ def handle_dm_link(event, client, say):
     message_ts = f"{raw_ts[:-6]}.{raw_ts[-6:]}"
 
     thread_ts_match = re.search(r"thread_ts=([0-9.]+)", text)
-    thread_ts = thread_ts_match.group(1)
+    thread_ts = thread_ts_match.group(1) if thread_ts_match else message_ts
 
     say(":spin-loading: Fetching and summarzing that thread. This might take a moment.")
 
@@ -120,7 +120,7 @@ def handle_dm_link(event, client, say):
         say(f"*Thread Summary:*\n{summary}\n\n_Link:_ <{text}|Original Thread>")
 
     except Exception as e:
-        print("error handling dm link summarization")
+        print(f"error handling dm link summarization {e}")
         say(
             "Sorry! I am unable to summarize that link! If the link is from a private channel, please invite me to that channel!"
         )
@@ -167,40 +167,41 @@ def handle_summarize(ack, body, client, logger, view):
 
         summary = ai_rspnd.choices[0].message.content
 
-        sum_blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Thread Summary (ss style)",
-                    "emoji": True,
-                },
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {"type": "plain_text", "text": "Model Used:", "emoji": True}
-                ],
-            },
-        ]
-
         permalink_response = client.chat_getPermalink(
             channel=channel_id, message_ts=thread_ts
         )
         thread_link = permalink_response["permalink"]
 
-        summary_text = (
-            f"*Thread Summary* ({style} style):\n{summary}\n_Requested by <@{user_id}>_"
-        )
+        sum_blocks = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"Thread Summary ({style} style)"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"{summary}",
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "plain_text",
+                        "text": f"Permalink: {thread_link} | AI Model used: {AI_MODEL} | Requested by {user_id}",
+                        "emoji": True,
+                    }
+                ],
+            },
+        ]
 
-        summary_text_dms = (
-            f"*Thread Summary* ({style} style):\n{summary}\n Thread: {thread_link} "
-        )
         if delivery == "dms":
-            client.chat_postMessage(channel=user_id, text=summary_text_dms)
+            client.chat_postMessage(channel=user_id, blocks=sum_blocks)
         else:
             client.chat_postMessage(
-                channel=channel_id, thread_ts=thread_ts, text=summary_text
+                channel=channel_id, thread_ts=thread_ts, blocks=sum_blocks
             )
 
     except Exception as e:
