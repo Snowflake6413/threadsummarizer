@@ -223,7 +223,7 @@ def handle_summarize(ack, body, client, logger, view):
                 "elements": [
                     {
                         "type": "plain_text",
-                        "text": f"Permalink: {thread_link} | AI Model used: {AI_MODEL} | Requested by {user_id}",
+                        "text": f" Permalink: {thread_link}) | AI Model used: {AI_MODEL} | Requested by <@{user_id}>",
                         "emoji": True,
                     }
                 ],
@@ -459,6 +459,12 @@ def summarize_magic_mention(event, client, say, ack, respond):
                 )
             except Exception:
                 pass
+
+
+# shhhh
+@app.action("style_action")
+def handle_sleep_shh(ack):
+    ack()
 
 
 if __name__ == "__main__":
