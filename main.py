@@ -17,14 +17,6 @@ AI_KEY = os.getenv("AI_KEY")
 AI_API_URL = os.getenv("AI_API_URL")
 AI_MODEL = os.getenv("AI_MODEL")
 
-# OwO what's this? Rawrrr! X3
-LOCKDOWN_MODE = os.getenv("FUNNY_BOOLEAN")
-LOCKDOWN_ID = os.getenv("FUNNY_ID")
-
-# This is real.
-BLACKLIST_MODE = os.getenv("FUNNY2_BOOLEAN")
-BLACKLIST_IDS = os.getenv("FUNNY2_IDS")
-
 
 # Sys Prompt
 sys_prompt = """You are a concise, professional assistant that summarizes Slack threads.
@@ -66,12 +58,14 @@ def handle_dm_link(event, client, say):
 
     text = event.get("text", "")
 
-    link_pattern = r"https://[A-Za-z0-9\-]+\.slack\.com/archives/[A-Za-z0-9]+/p[0-9]+"
+    link_pattern = (
+        r"https://[A-Za-z0-9\-]+\.slack\.com/archives/([A-Z0-9]+)/p([0-9]{16})"
+    )
     match = re.search(link_pattern, text)
 
     if not match:
         say(
-            "Hello! Please send me a link to the a Slack thread and I'll summarize it for you."
+            "Hello! Please send me a link to a Slack thread and I'll summarize it for you."
         )
         return
 
@@ -83,10 +77,12 @@ def handle_dm_link(event, client, say):
     thread_ts_match = re.search(r"thread_ts=([0-9.]+)", text)
     thread_ts = thread_ts_match.group(1) if thread_ts_match else message_ts
 
-    say(":spin-loading: Fetching and summarzing that thread. This might take a moment.")
+    say(
+        ":spin-loading: Fetching and summarizing that thread. This might take a moment."
+    )
 
     try:
-        result = client.conversation_replies(channel=channel_id, ts=thread_ts)
+        result = client.conversations_replies(channel=channel_id, ts=thread_ts)
         messages = result.get("messages", [])
 
         if not messages:
@@ -100,6 +96,7 @@ def handle_dm_link(event, client, say):
             thread_content.append(f"User {user}: {msg_text}")
 
         read_text = "\n".join(thread_content)
+        style = "short"
 
         ai_rspnd = smart_client.chat.completions.create(
             model=AI_MODEL,
@@ -120,7 +117,7 @@ def handle_dm_link(event, client, say):
         say(f"*Thread Summary:*\n{summary}\n\n_Link:_ <{text}|Original Thread>")
 
     except Exception as e:
-        print(f"error handling dm link summarization {e}")
+        sentry_sdk.capture_exception(e)
         say(
             "Sorry! I am unable to summarize that link! If the link is from a private channel, please invite me to that channel!"
         )
@@ -205,7 +202,7 @@ def handle_summarize(ack, body, client, logger, view):
             )
 
     except Exception as e:
-        print(f"Error handling modal submission! {e}")
+        sentry_sdk.capture_exception(e)
 
 
 @app.shortcut("action_sum")
@@ -347,19 +344,6 @@ def summary_menu(ack, shortcut, client):
 def summarize_magic_mention(event, client, say, ack, respond):
     ack()
 
-    if BLACKLIST_MODE and event.get("channel") == BLACKLIST_IDS:
-        thread_ts = event.get("thread_ts")
-        say(
-            text="Unable to summarize! This channel is on the blacklist.",
-            thread_ts=thread_ts,
-        )
-        return
-
-    if LOCKDOWN_MODE and event.get("channel") != LOCKDOWN_ID:
-        thread_ts = event.get("thread_ts")
-        say(text="cannot do the funny :( :xdd:", thread_ts=thread_ts)
-        return
-
     if "summarize" in event["text"].lower():
         channel_id = event["channel"]
         message_ts = event["ts"]
@@ -372,7 +356,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
                 channel=channel_id, timestamp=event["ts"], name="spin-loading"
             )
         except Exception as e:
-            print(f"unable to add reaction! {e}")
+            sentry_sdk.capture_exception(e)
 
         try:
             result = client.conversations_replies(channel=channel_id, ts=thread_ts)
@@ -382,7 +366,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
             for msg in messages:
                 if "*Thread Summary:*" in msg.get("text", "") and msg.get("bot_id"):
                     respond(
-                        say="This thread was already summarized.", thread_ts=thread_ts
+                        text="This thread was already summarized.", thread_ts=thread_ts
                     )
                     return
 
@@ -419,7 +403,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
                 {
                     "type": "context",
                     "elements": [
-                        {"type": "mrkdwn", "text": f"Model Used: '{AI_MODEL}"}
+                        {"type": "mrkdwn", "text": f" AI Model Used: {AI_MODEL}"}
                     ],
                 },
             ]
@@ -427,7 +411,7 @@ def summarize_magic_mention(event, client, say, ack, respond):
             say(blocks=sum_blocks, thread_ts=thread_ts)
 
         except Exception as e:
-            print(f"unable to summarize thread! {e}")
+            sentry_sdk.capture_exception(e)
             say(
                 text="Sorry, I had trouble summarizing the thread. Please try again later.",
                 thread_ts=thread_ts,

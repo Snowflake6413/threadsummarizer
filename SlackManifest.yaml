@@ -1,0 +1,47 @@
+display_information:
+  name: ThreadSummarizer5000
+  description: Summarize Slack threads painlessly!
+  background_color: "#3357c4"
+  long_description: "https://github.com/Snowflake6413/threadsummarizer\r
+
+    \r
+
+    Summarize Slack threads painlessly! (powered by AI!)\r
+
+    \r
+
+    This bot uses Hack Club AI to summarize. Since HCAI is a HQ service, please read the privacy policy at https://hack.af/privacy"
+features:
+  bot_user:
+    display_name: ThreadSummarizer5000
+    always_online: true
+  shortcuts:
+    - name: Summarize Thread
+      type: message
+      callback_id: action_sum
+      description: Summarizes a Slack thread using AI
+  slash_commands:
+    - command: /ping-20
+      description: Pong!
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - reactions:write
+      - app_mentions:read
+      - chat:write
+      - commands
+      - channels:history
+      - groups:history
+      - mpim:history
+      - im:history
+  pkce_enabled: false
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
