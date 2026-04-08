@@ -148,13 +148,7 @@ def handle_dm_link(event, client, say):
             {"type": "divider"},
             {
                 "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f" AI Model used: {AI_MODEL}",
-                        "emoji": True,
-                    }
-                ],
+                "elements": [{"type": "mrkdwn", "text": f" AI Model used: {AI_MODEL}"}],
             },
         ]
 
@@ -235,7 +229,6 @@ def handle_summarize(ack, body, client, logger, view):
                     {
                         "type": "mrkdwn",
                         "text": f" Permalink: {thread_link}) | AI Model used: {AI_MODEL} | Requested by <@{user_id}>",
-                        "emoji": True,
                     }
                 ],
             },
