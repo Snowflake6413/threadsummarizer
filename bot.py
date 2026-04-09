@@ -78,7 +78,7 @@ def handle_dm_link(event, client, say):
 
     text = event.get("text", "")
 
-    link_pattern = r"<?https://[A-Za-z0-9\-]+\.slack\.com/archives/([A-Z0-9]+)/p([0-9]{16})(?:\?thread_ts=([0-9.]+))?>?"
+    link_pattern = r"<?https://[A-Za-z0-9\-\.]+\.slack\.com/archives/([A-Z0-9]+)/p([0-9]{16})(?:\?thread_ts=([0-9.]+))?>?"
 
     match = re.search(link_pattern, text)
 
