@@ -33,7 +33,7 @@ Adjust your output based on the requested style:
 - TL;DR: One sentence, the absolute bottom line
 - Fuwwy: Summarize in a fun, uwu/furry internet style while still conveying the key points
 
-If no style was selected, default to Detailed.
+If no style was selected, default to Detailed. THIS IS IMPORTANT!!!!!!!!
 
 Always format your output using Slack-compatible markdown:
 - Use *bold* for emphasis (not **bold**)
@@ -99,6 +99,11 @@ def handle_dm_link(event, client, say):
     start_msg = say(
         ":spin-loading: Fetching and summarizing that thread. This might take a moment."
     )
+
+    try:
+        client.conversations_join(channel=channel_id)
+    except Exception:
+        pass
 
     try:
         result = client.conversations_replies(channel=channel_id, ts=thread_ts)
@@ -180,6 +185,11 @@ def handle_summarize(ack, body, client, logger, view):
     user_id = body["user"]["id"]
 
     try:
+        try:
+            client.conversations_join(channel=channel_id)
+        except Exception:
+            pass
+
         result = client.conversations_replies(channel=channel_id, ts=thread_ts)
         messages = result.get("messages", [])
 
