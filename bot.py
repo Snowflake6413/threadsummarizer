@@ -27,6 +27,12 @@ When summarizing, focus on:
 - Action items or next steps (if any)
 - Who is responsible for what (if mentioned)
 
+IMPORTANT: You MUST include inline citations for every claim in your summary.
+You MUST format these citations EXACTLY using Slack's link syntax with numbered brackets: `<URL|[1]>`, `<URL|[2]>`, etc.
+DO NOT output bare URLs (e.g. do not just print https://...). You MUST wrap them in `< >` with the bracketed number.
+The message URLs are provided in the input as `[Link: <URL>]`.
+Example: `The team decided to launch on Friday <https://hackclub.slack.com/archives/C123/p123|[1]>.`
+
 Adjust your output based on the requested style:
 - Short: 2-3 sentences max, just the core outcome
 - Detailed: Full breakdown with context, decisions, and action items
@@ -47,6 +53,7 @@ Always format your output using Slack-compatible markdown:
 
 Be neutral and factual. Do not editorialize or add information not present in the thread.
 """
+
 
 # OpenAI
 smart_client = OpenAI(api_key=AI_KEY, base_url=AI_API_URL)
@@ -113,11 +120,28 @@ def handle_dm_link(event, client, say):
             say("Unable to find messages. Is the link you sent valid?")
             return
 
+        try:
+            permalink_response = client.chat_getPermalink(
+                channel=channel_id, message_ts=thread_ts
+            )
+            thread_link = permalink_response["permalink"]
+            base_url = thread_link.split("/archives/")[0]
+        except Exception:
+            base_url = ""
+
         thread_content = []
         for msg in messages:
             user = msg.get("user", "Unknown User")
             msg_text = msg.get("text", "")
-            thread_content.append(f"User {user}: {msg_text}")
+            ts = msg.get("ts", "")
+            if base_url and ts:
+                ts_no_dot = ts.replace(".", "")
+                msg_link = f"{base_url}/archives/{channel_id}/p{ts_no_dot}"
+                if thread_ts and thread_ts != ts:
+                    msg_link += f"?thread_ts={thread_ts}"
+                thread_content.append(f"User {user} [Link: {msg_link}]: {msg_text}")
+            else:
+                thread_content.append(f"User {user}: {msg_text}")
 
         read_text = "\n".join(thread_content)
         style = "short"
@@ -160,6 +184,8 @@ def handle_dm_link(event, client, say):
         say(
             blocks=sum_dm_blocks,
             thread_ts=start_msg["ts"],
+            unfurl_links=False,
+            unfurl_media=False,
         )
 
     except Exception as e:
@@ -193,10 +219,29 @@ def handle_summarize(ack, body, client, logger, view):
         result = client.conversations_replies(channel=channel_id, ts=thread_ts)
         messages = result.get("messages", [])
 
+        try:
+            permalink_response = client.chat_getPermalink(
+                channel=channel_id, message_ts=thread_ts
+            )
+            thread_link = permalink_response["permalink"]
+            base_url = thread_link.split("/archives/")[0]
+        except Exception:
+            base_url = ""
+            thread_link = "Unknown Link"
+
         thread_content = []
         for msg in messages:
+            user = msg.get("user", "Unknown User")
             text = msg.get("text", "")
-            thread_content.append(f"User: {text}")
+            ts = msg.get("ts", "")
+            if base_url and ts:
+                ts_no_dot = ts.replace(".", "")
+                msg_link = f"{base_url}/archives/{channel_id}/p{ts_no_dot}"
+                if thread_ts and thread_ts != ts:
+                    msg_link += f"?thread_ts={thread_ts}"
+                thread_content.append(f"User {user} [Link: {msg_link}]: {text}")
+            else:
+                thread_content.append(f"User {user}: {text}")
         read_text = "\n".join(thread_content)
 
         ai_rspnd = smart_client.chat.completions.create(
@@ -214,11 +259,6 @@ def handle_summarize(ack, body, client, logger, view):
         )
 
         summary = ai_rspnd.choices[0].message.content
-
-        permalink_response = client.chat_getPermalink(
-            channel=channel_id, message_ts=thread_ts
-        )
-        thread_link = permalink_response["permalink"]
 
         sum_blocks = [
             {
@@ -238,17 +278,26 @@ def handle_summarize(ack, body, client, logger, view):
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": f" Permalink: {thread_link}) | AI Model used: {AI_MODEL} | Requested by <@{user_id}>",
+                        "text": f" Permalink: {thread_link} | AI Model used: {AI_MODEL} | Requested by <@{user_id}>",
                     }
                 ],
             },
         ]
 
         if delivery == "dms":
-            client.chat_postMessage(channel=user_id, blocks=sum_blocks)
+            client.chat_postMessage(
+                channel=user_id,
+                blocks=sum_blocks,
+                unfurl_links=False,
+                unfurl_media=False,
+            )
         else:
             client.chat_postMessage(
-                channel=channel_id, thread_ts=thread_ts, blocks=sum_blocks
+                channel=channel_id,
+                thread_ts=thread_ts,
+                blocks=sum_blocks,
+                unfurl_links=False,
+                unfurl_media=False,
             )
 
     except Exception as e:
@@ -412,6 +461,15 @@ def summarize_magic_mention(event, client, say, ack, respond):
             result = client.conversations_replies(channel=channel_id, ts=thread_ts)
             messages = result.get("messages", [])
 
+            try:
+                permalink_response = client.chat_getPermalink(
+                    channel=channel_id, message_ts=thread_ts
+                )
+                thread_link_url = permalink_response["permalink"]
+                base_url = thread_link_url.split("/archives/")[0]
+            except Exception:
+                base_url = ""
+
             thread_content = []
             for msg in messages:
                 if "*Thread Summary:*" in msg.get("text", "") and msg.get("bot_id"):
@@ -422,7 +480,16 @@ def summarize_magic_mention(event, client, say, ack, respond):
                     continue
                 user = msg.get("user", "Unknown User")
                 text = msg.get("text", "")
-                thread_content.append(f"User {user}: {text}")
+                ts = msg.get("ts", "")
+
+                if base_url and ts:
+                    ts_no_dot = ts.replace(".", "")
+                    msg_link = f"{base_url}/archives/{channel_id}/p{ts_no_dot}"
+                    if thread_ts and thread_ts != ts:
+                        msg_link += f"?thread_ts={thread_ts}"
+                    thread_content.append(f"User {user} [Link: {msg_link}]: {text}")
+                else:
+                    thread_content.append(f"User {user}: {text}")
 
             read_text = "\n".join(thread_content)
 
@@ -456,7 +523,12 @@ def summarize_magic_mention(event, client, say, ack, respond):
                 },
             ]
 
-            say(blocks=sum_blocks, thread_ts=thread_ts)
+            say(
+                blocks=sum_blocks,
+                thread_ts=thread_ts,
+                unfurl_links=False,
+                unfurl_media=False,
+            )
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
