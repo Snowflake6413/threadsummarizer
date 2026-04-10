@@ -27,11 +27,10 @@ When summarizing, focus on:
 - Action items or next steps (if any)
 - Who is responsible for what (if mentioned)
 
-IMPORTANT: You MUST include inline citations for every claim in your summary.
-You MUST format these citations EXACTLY using Slack's link syntax with numbered brackets: `<URL|[1]>`, `<URL|[2]>`, etc.
-DO NOT output bare URLs (e.g. do not just print https://...). You MUST wrap them in `< >` with the bracketed number.
-The message URLs are provided in the input as `[Link: <URL>]`.
+IMPORTANT: You must include 1-3 inline citations per paragraph or section to back up key points.
+Format these citations using Slack's link syntax with a bracketed number. You MUST replace the URL with the actual link provided in the prompt `[Link: https...]`.
 Example: `The team decided to launch on Friday <https://hackclub.slack.com/archives/C123/p123|[1]>.`
+Do NOT output the literal string `<URL|[1]>`. You must use the actual URL. Do not over-cite every single message, just cite the most relevant ones.
 
 Adjust your output based on the requested style:
 - Short: 2-3 sentences max, just the core outcome
